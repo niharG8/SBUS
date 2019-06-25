@@ -37,9 +37,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 	|| defined(STM32L432xx)		|| defined(_BOARD_MAPLE_MINI_H_) || defined(__AVR_ATmega2560__)
 #endif
 
+enum class SbusType {
+  STANDARD,
+  FASSTEST_12CH
+};
+
 class SBUS{
 	public:
-		SBUS(HardwareSerial& bus);
+		SBUS(HardwareSerial& bus, SbusType type);
 		void begin();
 		bool read(uint16_t* channels, bool* failsafe, bool* lostFrame);
 		bool readCal(float* calChannels, bool* failsafe, bool* lostFrame);
@@ -51,16 +56,24 @@ class SBUS{
 		void getReadCal(uint8_t channel,float *coeff,uint8_t len);
 		void setWriteCal(uint8_t channel,float *coeff,uint8_t len);
 		void getWriteCal(uint8_t channel,float *coeff,uint8_t len);
+    uint32_t getInterval();
 		~SBUS();
   private:
+    // Constants
 		const uint32_t _sbusBaud = 100000;
 		static const uint8_t _numChannels = 16;
 		const uint8_t _sbusHeader = 0x0F;
 		const uint8_t _sbusFooter = 0x00;
-		const uint8_t _sbus2Footer = 0x04;
+    const uint8_t _sbus2Footer = 0x04;
+		const uint8_t _sbusFasstest12ChFooter = 0x08;
 		const uint8_t _sbus2Mask = 0x0F;
 		const uint32_t SBUS_TIMEOUT_US = 7000;
-		uint8_t _parserState, _prevByte = _sbusFooter, _curByte;
+    const uint32_t SBUS_INTERVAL_NORMAL_US = 14000;
+    const uint32_t SBUS_INTERVAL_HIGHSPEED_US = 7000;
+    // Members
+    SbusType _type;
+    uint8_t _footer;
+		uint8_t _parserState, _prevByte, _curByte;
 		static const uint8_t _payloadSize = 24;
 		uint8_t _payload[_payloadSize];
 		const uint8_t _sbusLostFrame = 0x04;

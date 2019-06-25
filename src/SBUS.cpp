@@ -32,9 +32,26 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 	void sendByte();
 #endif
 /* SBUS object, input the serial bus */
-SBUS::SBUS(HardwareSerial& bus)
+SBUS::SBUS(HardwareSerial& bus, SbusType type)
 {
 	_bus = &bus;
+  _type = type;
+  // Set footer based on type
+  switch (type) {
+    case SbusType::STANDARD: {
+      _footer = _sbusFooter;
+      break;
+    }
+    case SbusType::FASSTEST_12CH: {
+      _footer = _sbusFasstest12ChFooter;
+      break;
+    }
+    default: {
+      _footer = _sbusFooter;
+      break;
+    }
+  }
+  _prevByte = _footer; // initialize for the first iteration
 }
 
 /* starts the serial communication */
@@ -168,7 +185,7 @@ void SBUS::write(uint16_t* channels)
 	// flags
 	packet[23] = 0x00;
 	// footer
-	packet[24] = _sbusFooter;
+	packet[24] = _footer;
 	#if defined(__MK20DX128__) || defined(__MK20DX256__) // Teensy 3.0 || Teensy 3.1/3.2
 		// use ISR to send byte at a time,
 		// 130 us between bytes to emulate 2 stop bits
@@ -305,7 +322,7 @@ bool SBUS::parse()
 		_curByte = _bus->read();
 		// find the header
 		if (_parserState == 0) {
-				if ((_curByte == _sbusHeader) && ((_prevByte == _sbusFooter) || ((_prevByte & _sbus2Mask) == _sbus2Footer))) {
+				if ((_curByte == _sbusHeader) && ((_prevByte == _sbusFooter) || (_prevByte == _sbusFasstest12ChFooter) || ((_prevByte & _sbus2Mask) == _sbus2Footer))) {
 					_parserState++;
 				} else {
 					_parserState = 0;
@@ -318,7 +335,7 @@ bool SBUS::parse()
 			}
 			// check the end byte
 			if ((_parserState-1) == _payloadSize) {
-				if ((_curByte == _sbusFooter) || ((_curByte & _sbus2Mask) == _sbus2Footer)) {
+				if ((_curByte == _sbusFooter) || (_curByte == _sbusFasstest12ChFooter) || ((_curByte & _sbus2Mask) == _sbus2Footer)) {
 					_parserState = 0;
 					return true;
 				} else {
@@ -350,6 +367,23 @@ float SBUS::PolyVal(size_t PolySize, float *Coefficients, float X) {
 	} else {
 		return 0;
 	}
+}
+
+uint32_t SBUS::getInterval() {
+  switch (_type) {
+    case SbusType::STANDARD: {
+      return SBUS_INTERVAL_NORMAL_US;
+      break;
+    }
+    case SbusType::FASSTEST_12CH: {
+      return SBUS_INTERVAL_HIGHSPEED_US;
+      break;
+    }
+    default: {
+      return SBUS_INTERVAL_NORMAL_US;
+      break;
+    }
+  }
 }
 
 // function to send byte at a time with
